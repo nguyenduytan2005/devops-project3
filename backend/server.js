@@ -40,17 +40,14 @@ app.get('/api/bugs', async (req, res) => {
 });
 
 // ── POST /api/bugs ───────────────────────────────────────────────────────────
-// BUG #2: No validation — empty / whitespace-only titles are accepted.
-// STUDENT FIX: Check that title is a non-empty, non-whitespace string.
-//   Return HTTP 400 with { error: "Title is required" } when invalid.
+// Rejects missing, empty or whitespace-only titles with 400.
 app.post('/api/bugs', async (req, res) => {
   try {
     const { title, status = 'open' } = req.body;
 
-    // STUDENT FIX: Add validation here
-    // if (!title || !title.trim()) {
-    //   return res.status(400).json({ error: 'Title is required' });
-    // }
+    if (typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
 
     const result = await pool.query(
       'INSERT INTO bugs (title, status) VALUES ($1, $2) RETURNING *',
