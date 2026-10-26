@@ -1,26 +1,24 @@
-# ===========================================
-# STUDENT TODO: Create Frontend Dockerfile
-# ===========================================
-#
-# Requirements:
-# 1. Must use multi-stage build
-# 2. Stage 1 (builder):
-#    - Use node:24-alpine
-#    - Install dependencies with npm ci
-#    - Accept the backend URL as a build ARG: ARG REACT_APP_API_URL (baked in at build time)
-#    - Build the React app with npm run build
-#
-# 3. Stage 2 (production):
-#    - Use node:24-alpine
-#    - Install 'serve' globally (pin the major version, e.g. serve@14)
-#    - Copy only the build folder from builder stage
-#    - Expose port 3000
-#    - Use serve to run the app
-#
-# Hints:
-# - npm run build creates a 'build' folder
-# - serve -s build -l 3000 serves the static files
-# - Research: "Docker multi-stage React production"
-# ===========================================
+# Multi-stage build for the React frontend.
+# Stage 1 compiles the app into static files; stage 2 serves only build/
+# with `serve`, so node_modules and source never ship.
 
-# YOUR CODE HERE:
+# ── Stage 1: build the static bundle ─────────────────────────────────────────
+FROM node:24-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+# REACT_APP_* values are baked into the JavaScript bundle at BUILD time
+ARG REACT_APP_API_URL=http://localhost:8080
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+RUN npm run build
+
+# ── Stage 2: serve the static files ──────────────────────────────────────────
+FROM node:24-alpine AS production
+ENV NODE_ENV=production
+WORKDIR /app
+RUN npm install -g serve@14
+COPY --from=builder /app/build ./build
+USER node
+EXPOSE 3000
+CMD ["serve", "-s", "build", "-l", "3000"]
