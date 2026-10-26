@@ -90,6 +90,5 @@ app.listen(port, () => {
   console.log(`Bug Tracker backend running on port ${port}`);
 });
 
-// BUG #6: App is not exported — tests cannot import it!
-// STUDENT FIX: Add the line below (remove the comment characters):
-// module.exports = app;
+// Export the app so tests (supertest) can import it.
+module.exports = app;
