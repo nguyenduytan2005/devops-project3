@@ -8,13 +8,12 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// BUG #1: Wrong default password — does not match docker-compose.yml!
-// STUDENT FIX: Change 'wrongpassword' to 'bugpassword' (or use env var properly)
+// Defaults match .env.example / docker-compose.yml; override with DB_* env vars.
 const pool = new Pool({
   user:     process.env.DB_USER     || 'postgres',
   host:     process.env.DB_HOST     || 'localhost',
   database: process.env.DB_NAME     || 'bugdb',
-  password: process.env.DB_PASSWORD || 'wrongpassword',
+  password: process.env.DB_PASSWORD || 'bugpassword',
   port:     parseInt(process.env.DB_PORT) || 5432,
 });
 
