@@ -45,7 +45,7 @@ app.post('/api/bugs', async (req, res) => {
   try {
     const { title, status = 'open' } = req.body;
 
-    if (typeof title !== 'string' || !title.trim()) {
+    if (typeof title !== 'string') {
       return res.status(400).json({ error: 'Title is required' });
     }
 
