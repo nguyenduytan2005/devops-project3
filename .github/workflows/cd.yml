@@ -50,84 +50,43 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # -- STUDENT TODO 1: Log in to Docker Hub --------------------------------
-      # Use docker/login-action@v4 with
-      #   username: ${{ secrets.DOCKER_HUB_USERNAME }}
-      #   password: ${{ secrets.DOCKER_HUB_TOKEN }}
-      #
-      # - name: Log in to Docker Hub
-      #   uses: ???
-      #   with:
-      #     username: ???
-      #     password: ???
+      # Docker Hub login with an access token (never the account password)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      # -- STUDENT TODO 2: Build and push the backend image ---------------------
-      # Use docker/build-push-action@v7, context ./backend, push: true.
-      # Tag with BOTH :latest and the commit SHA (${{ github.sha }}) so every
-      # deployment can be traced and rolled back:
-      #   <your-dockerhub-username>/bug-tracker-backend:latest
-      #   <your-dockerhub-username>/bug-tracker-backend:${{ github.sha }}
-      #
-      # - name: Build and push backend image
-      #   uses: ???
-      #   with:
-      #     context: ???
-      #     push: true
-      #     tags: |
-      #       ???
+      # Two tags per image: :latest is what Render pulls, :<sha> lets every
+      # deployment be traced back to a commit and rolled back.
+      - name: Build and push backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/bug-tracker-backend:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/bug-tracker-backend:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
 
-      # -- STUDENT TODO 3: Build and push the frontend image --------------------
-      # Same pattern, context ./frontend, image name bug-tracker-frontend.
-      # REACT_APP_API_URL is baked into the JavaScript at BUILD time, so pass it
-      # as a build argument:
-      #   build-args: |
-      #     REACT_APP_API_URL=${{ vars.BACKEND_URL }}
-      #
-      # - name: Build and push frontend image
-      #   uses: ???
-      #   with:
-      #     context: ???
-      #     push: true
-      #     build-args: |
-      #       ???
-      #     tags: |
-      #       ???
+      # REACT_APP_API_URL is baked into the JavaScript bundle at build time
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            REACT_APP_API_URL=${{ vars.BACKEND_URL }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/bug-tracker-frontend:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/bug-tracker-frontend:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
 
   # ===========================================================================
-  # OPTION A - Deploy to your own server via SSH
-  # ===========================================================================
-  # GitHub Actions -> SSH into the server -> docker compose pull -> up -d
-  #
-  # Pre-requisites on the server (Lab 4 - SSH):
-  #   - Docker Engine + the docker compose plugin installed
-  #   - the repository cloned to ~/app with a .env file next to docker-compose.yml
-  #   - ports 3000 and 8080 open in the cloud firewall / security group
-  #
-  # Tip: the server .env holds IMAGE_TAG; write the new tag there before
-  # `docker compose pull` so the server runs exactly the image just built.
-  # ===========================================================================
-  deploy-ssh:
-    name: "[Option A] Deploy to server via SSH"
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    timeout-minutes: 10
-
-    steps:
-      # -- STUDENT TODO 4A: Deploy via SSH --------------------------------------
-      # Use appleboy/ssh-action@v1 with host/username/key from the secrets
-      # SSH_HOST / SSH_USER / SSH_PRIVATE_KEY. Start the script with `set -e`
-      # so the job fails if any command fails, then:
-      #   cd ~/app
-      #   git pull --ff-only origin main
-      #   (update IMAGE_TAG in .env)
-      #   docker compose -f docker-compose.yml pull
-      #   docker compose -f docker-compose.yml up -d --no-build --remove-orphans
-      #
-      # Finish with a smoke test: curl -fsS "${{ vars.BACKEND_URL }}/health"
-      - run: echo "Option A placeholder - replace this line with your SSH deploy step"
-
-  # ===========================================================================
-  # OPTION B - Deploy on Render (no SSH needed)
+  # Deploy on Render (Option B). Option A (SSH to a VPS) is not used, so its
+  # placeholder job was removed.
   # ===========================================================================
   # One-time setup in the Render dashboard (not in code):
   #   1. Create a PostgreSQL database; load database/database.sql into it.
@@ -139,23 +98,33 @@ jobs:
   #      RENDER_DEPLOY_HOOK_BACKEND / RENDER_DEPLOY_HOOK_FRONTEND.
   #
   # Render does not poll Docker Hub for new image tags; the deploy hook is how
-  # CD tells Render to pull the new image (see Lab 4 - PaaS).
-  #
-  # STUDENT TODO 4B: uncomment and adapt (add `if: ...` or delete the job you
-  # do not use - a job whose secret is missing will fail).
-  #
-  # deploy-render:
-  #   name: "[Option B] Trigger Render deploy"
-  #   runs-on: ubuntu-latest
-  #   needs: build-and-push
-  #   timeout-minutes: 5
-  #   steps:
-  #     - name: Trigger backend deploy
-  #       env:
-  #         HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
-  #       run: curl -fsS -X POST "$HOOK_URL"
-  #
-  #     - name: Trigger frontend deploy
-  #       env:
-  #         HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
-  #       run: curl -fsS -X POST "$HOOK_URL"
+  # CD tells Render to pull the new image.
+  # ===========================================================================
+  deploy-render:
+    name: Trigger Render deploy
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    timeout-minutes: 5
+
+    steps:
+      # A missing hook means the Render service is not set up yet: warn and
+      # skip instead of failing, so the images above still count as published.
+      - name: Trigger backend deploy
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_BACKEND is not set - skipping backend deploy"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK_URL"
+
+      - name: Trigger frontend deploy
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_FRONTEND is not set - skipping frontend deploy"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK_URL"
