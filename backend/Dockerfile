@@ -1,28 +1,19 @@
-# ===========================================
-# STUDENT TODO: Create a Multi-Stage Dockerfile
-# ===========================================
-#
-# Requirements:
-# 1. Stage 1 (builder):
-#    - Use node:24-alpine as base
-#    - Set working directory
-#    - Copy package files and install ALL dependencies
-#    - Copy source code
-#
-# 2. Stage 2 (production):
-#    - Use node:24-alpine as base
-#    - Set working directory
-#    - Copy only package files from builder
-#    - Install ONLY production dependencies (hint: npm ci --omit=dev)
-#    - Copy application code from builder
-#    - Run as the non-root user (USER node) and set NODE_ENV=production
-#    - Expose the correct port
-#    - Set the start command
-#
-# Hints:
-# - Research: "Docker multi-stage build Node.js"
-# - Use COPY --from=builder to copy between stages
-# - Final image should be as small as possible
-# ===========================================
+# Multi-stage build for the Express backend.
+# Stage 1 installs production dependencies only; stage 2 copies them into a
+# clean image with the source, so npm cache and dev deps never ship.
 
-# YOUR CODE HERE:
+# ── Stage 1: production dependencies ─────────────────────────────────────────
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# ── Stage 2: lean runtime image ──────────────────────────────────────────────
+FROM node:24-alpine AS production
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+USER node
+EXPOSE 8080
+CMD ["node", "server.js"]

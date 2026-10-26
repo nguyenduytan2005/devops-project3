@@ -1,62 +1,68 @@
-# ===========================================
-# STUDENT TODO: Complete this Docker Compose file
-# ===========================================
+# Bug Tracker: React frontend + Express backend + PostgreSQL 15.
+# Copy .env.example to .env first; every credential below is read from it.
 #
-# Requirements:
-# 1. Frontend service:
-#    - Build from ./frontend directory
-#    - Expose port 3000
-#    - Pass REACT_APP_API_URL as a build arg (default http://localhost:8080)
-#    - Should depend on backend being healthy (condition: service_healthy)
+#   docker compose up --build -d
 #
-# 2. Backend service:
-#    - Build from ./backend directory
-#    - Expose port 8080
-#    - Must have environment variables for database connection
-#    - Should depend on postgres and wait for it to be healthy
-#    - Add a healthcheck
-#
-# 3. Postgres service:
-#    - Use postgres:15-alpine image
-#    - Set POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD from the .env file
-#      (copy .env.example to .env; use ${DB_NAME} etc. - no hard-coded passwords)
-#    - Publish 5432:5432 so you can run the backend tests from your laptop
-#    - Use a named volume for data persistence
-#    - Mount the init script from ./database/database.sql
-#    - Add a healthcheck
-#
-# 4. Define named volumes
-#
-# Hints:
-# - Research: "docker-compose healthcheck"
-# - Research: "docker-compose depends_on condition"
-# - Database env vars for the backend: DB_HOST=postgres, DB_PORT=5432, and DB_NAME / DB_USER / DB_PASSWORD from .env
-# - The top-level 'version:' key is obsolete in Compose v2 - do not add it
-#
-# Example healthcheck:
-#   healthcheck:
-#      test: ['CMD-SHELL', 'pg_isready -U postgres -d bugdb']
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-# ===========================================
+# Start order is enforced with healthchecks: postgres healthy -> backend
+# healthy -> frontend. Data lives in the postgres_data named volume, so it
+# survives `docker compose down` (only `down -v` wipes it).
 
 services:
-  # STUDENT TODO: Define frontend service
   frontend:
-    build: ./frontend
-    # TODO: Add ports, depends_on
+    build:
+      context: ./frontend
+      args:
+        # Baked into the JS bundle at build time (the browser calls this URL)
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
+    image: ${DOCKER_HUB_USERNAME:-local}/bug-tracker-frontend:${IMAGE_TAG:-latest}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # STUDENT TODO: Define backend service
   backend:
     build: ./backend
-    # TODO: Add ports, environment, depends_on, healthcheck
+    image: ${DOCKER_HUB_USERNAME:-local}/bug-tracker-backend:${IMAGE_TAG:-latest}
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # busybox wget ships with node:24-alpine, so no extra package is needed
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
-  # STUDENT TODO: Define postgres service
   postgres:
     image: postgres:15-alpine
-    # TODO: Add environment, ports, volumes, healthcheck
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Runs once, only when the data volume is empty
+      - ./database/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-# STUDENT TODO: Define named volumes
 volumes:
   postgres_data:
