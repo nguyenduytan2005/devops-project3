@@ -76,13 +76,35 @@ app.delete('/api/bugs/:id', async (req, res) => {
   }
 });
 
-// BUG #4: PUT endpoint is missing — but tests expect it!
-// STUDENT TODO: Implement PUT /api/bugs/:id
-//   - Accept { title, status } in the request body
-//   - Query: UPDATE bugs SET title=$1, status=$2 WHERE id=$3 RETURNING *
-//   - Return 200 with the updated row, or 404 if not found.
-//   - Valid status values: 'open', 'in_progress', 'closed'
-//
+// ── PUT /api/bugs/:id ────────────────────────────────────────────────────────
+// Accepts { title, status }; returns 200 with the updated row, 400 on invalid
+// input, or 404 if no bug has that id.
+const VALID_STATUSES = ['open', 'in_progress', 'closed'];
+
+app.put('/api/bugs/:id', async (req, res) => {
+  try {
+    const { title, status } = req.body;
+
+    if (typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+
+    const result = await pool.query(
+      'UPDATE bugs SET title = $1, status = $2 WHERE id = $3 RETURNING *',
+      [title, status, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Bug not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // OPTIONAL CHALLENGE: also accept a { severity } field in the body
 //   and store it in the database.  severity must be one of:
 //   'low', 'medium', 'high', 'critical'
