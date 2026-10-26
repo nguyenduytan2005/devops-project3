@@ -80,15 +80,13 @@ app.post('/api/bugs', async (req, res) => {
 //   'low', 'medium', 'high', 'critical'
 
 // ── Server startup ───────────────────────────────────────────────────────────
-// BUG #5: Server starts unconditionally — this causes a port conflict when Jest
-//   imports this file, because supertest also binds a port.
-// STUDENT FIX: Wrap the listen() call so it only runs when this file is the
-//   entry-point, not when it is require()-d by a test.
-//   Hint: if (require.main === module) { app.listen(...) }
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`Bug Tracker backend running on port ${port}`);
-});
+// Only listen when run directly (node server.js), not when require()-d by tests.
+if (require.main === module) {
+  const port = process.env.PORT || 8080;
+  app.listen(port, () => {
+    console.log(`Bug Tracker backend running on port ${port}`);
+  });
+}
 
 // Export the app so tests (supertest) can import it.
 module.exports = app;
