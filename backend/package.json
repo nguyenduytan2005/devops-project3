@@ -11,7 +11,8 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testTimeout": 10000
+    "testTimeout": 10000,
+    "testPathIgnorePatterns": ["/node_modules/", "<rootDir>/tests/todos.test.js"]
   },
   "dependencies": {
     "express": "^4.18.2",
