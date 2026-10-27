@@ -190,6 +190,7 @@ function App() {
         <div style={S.header}>
           <h1 style={S.title}>Bug Tracker System</h1>
           <p style={S.subtitle}>DevOps Project — Greenwich Vietnam</p>
+          <p style={S.subtitle}>NGUYEN DUY TAN</p>
         </div>
 
         {/* Input row */}
